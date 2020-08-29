@@ -66,7 +66,6 @@ typedef enum _ClutterFrameClockState
   CLUTTER_FRAME_CLOCK_STATE_IDLE,
   CLUTTER_FRAME_CLOCK_STATE_SCHEDULED,
   CLUTTER_FRAME_CLOCK_STATE_DISPATCHING,
-  CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED,
 } ClutterFrameClockState;
 
 struct _ClutterFrameClock
@@ -107,6 +106,8 @@ struct _ClutterFrameClock
 
   gboolean pending_reschedule;
   gboolean pending_reschedule_now;
+
+  gboolean pending_presented;
 
   int inhibit_count;
 
@@ -268,15 +269,17 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                                             frame_info->refresh_rate);
     }
 
+  frame_clock->pending_presented = FALSE;
+
   switch (frame_clock->state)
     {
     case CLUTTER_FRAME_CLOCK_STATE_INIT:
-    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
-    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
       g_warn_if_reached ();
       break;
+    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+      break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
-    case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
       frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
       maybe_reschedule_update (frame_clock);
       break;
@@ -516,7 +519,6 @@ clutter_frame_clock_inhibit (ClutterFrameClock *frame_clock)
           frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
           break;
         case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
-        case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
           break;
         }
 
@@ -556,7 +558,6 @@ clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
       return;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
-    case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
       frame_clock->pending_reschedule = TRUE;
       frame_clock->pending_reschedule_now = TRUE;
       return;
@@ -595,7 +596,6 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
       return;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
-    case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
       frame_clock->pending_reschedule = TRUE;
       return;
     }
@@ -642,21 +642,28 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
     }
   COGL_TRACE_END (ClutterFrameClockEvents);
 
-  COGL_TRACE_BEGIN (ClutterFrameClockTimelines, "Frame Clock (timelines)");
-  advance_timelines (frame_clock, time_us);
-  COGL_TRACE_END (ClutterFrameClockTimelines);
+  if (!frame_clock->pending_presented)
+  {
+    COGL_TRACE_BEGIN (ClutterFrameClockTimelines, "Frame Clock (timelines)");
+    advance_timelines (frame_clock, time_us);
+    COGL_TRACE_END (ClutterFrameClockTimelines);
 
-  COGL_TRACE_BEGIN (ClutterFrameClockFrame, "Frame Clock (frame)");
-  result = frame_clock->listener.iface->frame (frame_clock,
-                                               frame_count,
-                                               time_us,
-                                               frame_clock->listener.user_data);
-  COGL_TRACE_END (ClutterFrameClockFrame);
+    COGL_TRACE_BEGIN (ClutterFrameClockFrame, "Frame Clock (frame)");
+    result = frame_clock->listener.iface->frame (frame_clock,
+                                                 frame_count,
+                                                 time_us,
+                                                 frame_clock->listener.user_data);
+    COGL_TRACE_END (ClutterFrameClockFrame);
+  }
+  else
+  {
+    result = CLUTTER_FRAME_RESULT_IDLE;
+    frame_clock->pending_reschedule = TRUE;
+  }
 
   switch (frame_clock->state)
     {
     case CLUTTER_FRAME_CLOCK_STATE_INIT:
-    case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
       g_warn_if_reached ();
       break;
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
@@ -666,13 +673,14 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
       switch (result)
         {
         case CLUTTER_FRAME_RESULT_PENDING_PRESENTED:
-          frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED;
+          frame_clock->pending_presented = TRUE;
           break;
         case CLUTTER_FRAME_RESULT_IDLE:
-          frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
-          maybe_reschedule_update (frame_clock);
           break;
         }
+
+      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
+      maybe_reschedule_update (frame_clock);
       break;
     }
 }
