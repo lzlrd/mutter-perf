@@ -28,6 +28,9 @@
 
 #ifdef COGL_HAS_TRACING
 
+#include <sysprof-capture.h>
+#include <sysprof-capture-writer.h>
+
 typedef struct _CoglTraceContext CoglTraceContext;
 
 typedef struct _CoglTraceHead
@@ -55,6 +58,12 @@ cogl_set_tracing_enabled_on_thread (GMainContext *main_context,
 
 COGL_EXPORT void
 cogl_set_tracing_disabled_on_thread (GMainContext *main_context);
+
+COGL_EXPORT
+SysprofCaptureWriter * cogl_acquire_capture_writer (void);
+
+COGL_EXPORT
+void cogl_release_capture_writer (void);
 
 static inline void
 cogl_trace_begin (CoglTraceHead *head,
@@ -111,6 +120,12 @@ cogl_set_tracing_enabled_on_thread (void       *data,
                                     const char *filename);
 COGL_EXPORT void
 cogl_set_tracing_disabled_on_thread (void *data);
+
+COGL_EXPORT
+void * cogl_acquire_capture_writer (void);
+
+COGL_EXPORT
+void cogl_release_capture_writer (void);
 
 #endif /* COGL_HAS_TRACING */
 
