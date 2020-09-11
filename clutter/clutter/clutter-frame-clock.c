@@ -295,8 +295,13 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
       maybe_reschedule_update (frame_clock);
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
-      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED;
-      maybe_reschedule_update (frame_clock);
+      /* The GPU has caught up now so we can start using
+       * last_presentation_time_us again. But rather than dropping back to
+       * SCHEDULED, let's force a reschedule from IDLE. This way we'll get a
+       * more precise next update time based on last_presentation_time_us.
+       */
+      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
+      clutter_frame_clock_schedule_update (frame_clock);
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
       frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE;
@@ -399,7 +404,8 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
 
   refresh_interval_us = frame_clock->refresh_interval_us;
 
-  if (frame_clock->last_presentation_time_us == 0)
+  if (frame_clock->last_presentation_time_us == 0 ||
+      frame_clock->state >= CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE)
     {
       *out_next_update_time_us =
         frame_clock->last_dispatch_time_us ?
