@@ -1068,9 +1068,9 @@ clutter_stage_view_get_frame_clock (ClutterStageView *view)
 }
 
 static void
-handle_frame_clock_before_frame (ClutterFrameClock *frame_clock,
-                                 int64_t            frame_count,
-                                 gpointer           user_data)
+handle_frame_clock_update (ClutterFrameClock *frame_clock,
+                           int64_t            frame_count,
+                           gpointer           user_data)
 {
   ClutterStageView *view = user_data;
   ClutterStageViewPrivate *priv =
@@ -1209,7 +1209,7 @@ handle_frame_clock_frame (ClutterFrameClock *frame_clock,
 }
 
 static const ClutterFrameListenerIface frame_clock_listener_iface = {
-  .before_frame = handle_frame_clock_before_frame,
+  .update = handle_frame_clock_update,
   .frame = handle_frame_clock_frame,
 };
 

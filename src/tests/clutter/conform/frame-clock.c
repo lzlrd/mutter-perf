@@ -485,9 +485,9 @@ frame_clock_schedule_update_now (void)
 }
 
 static void
-before_frame_frame_clock_before_frame (ClutterFrameClock *frame_clock,
-                                       int64_t            frame_count,
-                                       gpointer           user_data)
+update_frame_clock_update (ClutterFrameClock *frame_clock,
+                           int64_t            frame_count,
+                           gpointer           user_data)
 {
   int64_t *expected_frame_count = user_data;
 
@@ -495,10 +495,10 @@ before_frame_frame_clock_before_frame (ClutterFrameClock *frame_clock,
 }
 
 static ClutterFrameResult
-before_frame_frame_clock_frame (ClutterFrameClock *frame_clock,
-                                int64_t            frame_count,
-                                int64_t            time_us,
-                                gpointer           user_data)
+update_frame_clock_frame (ClutterFrameClock *frame_clock,
+                          int64_t            frame_count,
+                          int64_t            time_us,
+                          gpointer           user_data)
 {
   int64_t *expected_frame_count = user_data;
   ClutterFrameInfo frame_info;
@@ -514,9 +514,9 @@ before_frame_frame_clock_frame (ClutterFrameClock *frame_clock,
   return CLUTTER_FRAME_RESULT_PENDING_PRESENTED;
 }
 
-static const ClutterFrameListenerIface before_frame_frame_listener_iface = {
-  .before_frame = before_frame_frame_clock_before_frame,
-  .frame = before_frame_frame_clock_frame,
+static const ClutterFrameListenerIface update_frame_listener_iface = {
+  .update = update_frame_clock_update,
+  .frame = update_frame_clock_frame,
 };
 
 static gboolean
@@ -530,7 +530,7 @@ quit_main_loop_timeout (gpointer user_data)
 }
 
 static void
-frame_clock_before_frame (void)
+frame_clock_update (void)
 {
   GMainLoop *main_loop;
   ClutterFrameClock *frame_clock;
@@ -540,7 +540,7 @@ frame_clock_before_frame (void)
   main_loop = g_main_loop_new (NULL, FALSE);
   frame_clock = clutter_frame_clock_new (refresh_rate,
                                          0,
-                                         &before_frame_frame_listener_iface,
+                                         &update_frame_listener_iface,
                                          &expected_frame_count);
 
   clutter_frame_clock_schedule_update (frame_clock);
@@ -838,7 +838,7 @@ CLUTTER_TEST_SUITE (
   CLUTTER_TEST_UNIT ("/frame-clock/delayed-damage", frame_clock_delayed_damage)
   CLUTTER_TEST_UNIT ("/frame-clock/no-damage", frame_clock_no_damage)
   CLUTTER_TEST_UNIT ("/frame-clock/schedule-update-now", frame_clock_schedule_update_now)
-  CLUTTER_TEST_UNIT ("/frame-clock/before-frame", frame_clock_before_frame)
+  CLUTTER_TEST_UNIT ("/frame-clock/update", frame_clock_update)
   CLUTTER_TEST_UNIT ("/frame-clock/inhibit", frame_clock_inhibit)
   CLUTTER_TEST_UNIT ("/frame-clock/reschedule-on-idle", frame_clock_reschedule_on_idle)
   CLUTTER_TEST_UNIT ("/frame-clock/destroy-signal", frame_clock_destroy_signal)

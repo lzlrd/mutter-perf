@@ -633,14 +633,14 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
 
   frame_count = frame_clock->frame_count++;
 
-  COGL_TRACE_BEGIN (ClutterFrameClockEvents, "Frame Clock (before frame)");
-  if (frame_clock->listener.iface->before_frame)
+  COGL_TRACE_BEGIN (ClutterFrameClockUpdate, "Frame Clock (update)");
+  if (frame_clock->listener.iface->update)
     {
-      frame_clock->listener.iface->before_frame (frame_clock,
-                                                 frame_count,
-                                                 frame_clock->listener.user_data);
+      frame_clock->listener.iface->update (frame_clock,
+                                           frame_count,
+                                           frame_clock->listener.user_data);
     }
-  COGL_TRACE_END (ClutterFrameClockEvents);
+  COGL_TRACE_END (ClutterFrameClockUpdate);
 
   if (!frame_clock->pending_presented)
   {

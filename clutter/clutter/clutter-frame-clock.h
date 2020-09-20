@@ -45,9 +45,9 @@ G_DECLARE_FINAL_TYPE (ClutterFrameClock, clutter_frame_clock,
  */
 typedef struct _ClutterFrameListenerIface
 {
-  void (* before_frame) (ClutterFrameClock *frame_clock,
-                         int64_t            frame_count,
-                         gpointer           user_data);
+  void (* update) (ClutterFrameClock *frame_clock,
+                   int64_t            frame_count,
+                   gpointer           user_data);
   ClutterFrameResult (* frame) (ClutterFrameClock *frame_clock,
                                 int64_t            frame_count,
                                 int64_t            time_us,
