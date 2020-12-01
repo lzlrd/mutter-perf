@@ -38,6 +38,17 @@ stages:
           https://gitlab.gnome.org/GNOME/gdm.git \
           3.38.0 . &&
 
+      ./.gitlab-ci/install-meson-project.sh \
+          -Denable_gtk=false \
+          -Dhelp=false \
+          -Dlibunwind=false \
+          -Dwith_sysprofd=none \
+          -Denable_tools=false \
+          -Denable_tests=false \
+          -Denable_examples=false \
+          https://gitlab.gnome.org/GNOME/sysprof.git \
+          3.38.1 . &&
+
       dnf clean all
 
 default:
