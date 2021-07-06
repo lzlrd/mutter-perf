@@ -106,7 +106,7 @@ GType cogl_context_get_gtype (void);
 
 /**
  * cogl_context_new: (constructor) (skip)
- * @display: (allow-none): A #CoglDisplay pointer
+ * @display: (allow-none) (type gpointer): A #CoglDisplay pointer
  * @error: A GError return location.
  *
  * Creates a new #CoglContext which acts as an application sandbox
@@ -130,7 +130,7 @@ cogl_context_new (CoglDisplay *display,
  * cogl_context_new() then this function returns a pointer to the
  * display that was automatically setup internally.
  *
- * Return value: (transfer none): The #CoglDisplay associated with the
+ * Returns: (transfer none) (type gpointer): The #CoglDisplay associated with the
  *               given @context.
  * Since: 1.8
  * Stability: unstable
@@ -149,7 +149,7 @@ cogl_context_get_display (CoglContext *context);
  * a pointer to the renderer that was automatically connected
  * internally.
  *
- * Return value: (transfer none): The #CoglRenderer associated with the
+ * Return: (transfer none) (type gpointer): The #CoglRenderer associated with the
  *               given @context.
  * Since: 1.16
  * Stability: unstable
