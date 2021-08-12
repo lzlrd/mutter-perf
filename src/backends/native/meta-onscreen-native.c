@@ -1232,6 +1232,7 @@ post_latest_swap (CoglOnscreen *onscreen)
 
   flags = META_KMS_UPDATE_FLAG_NONE;
   kms_feedback = meta_kms_post_pending_update_sync (kms, kms_device, flags);
+  g_return_if_fail (kms_feedback != NULL);
 
   switch (meta_kms_feedback_get_result (kms_feedback))
     {
