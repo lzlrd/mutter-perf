@@ -140,6 +140,7 @@ static void
 meta_kms_plane_assignment_free (MetaKmsPlaneAssignment *plane_assignment)
 {
   g_clear_pointer (&plane_assignment->fb_damage, meta_kms_fb_damage_free);
+  g_clear_object (&plane_assignment->buffer);
   g_free (plane_assignment);
 }
 
@@ -220,7 +221,7 @@ meta_kms_update_assign_plane (MetaKmsUpdate          *update,
     .update = update,
     .crtc = crtc,
     .plane = plane,
-    .buffer = buffer,
+    .buffer = g_object_ref (buffer),
     .src_rect = src_rect,
     .dst_rect = dst_rect,
     .flags = flags,
