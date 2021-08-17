@@ -498,6 +498,10 @@ process_plane_assignment (MetaKmsImplDevice  *impl_device,
                                    error))
             return FALSE;
         }
+
+      meta_kms_crtc_remember_plane_buffer (plane_assignment->crtc,
+                                           meta_kms_plane_get_id (plane),
+                                           buffer);
     }
   else
     {
@@ -525,6 +529,10 @@ process_plane_assignment (MetaKmsImplDevice  *impl_device,
                                    error))
             return FALSE;
         }
+
+      meta_kms_crtc_remember_plane_buffer (plane_assignment->crtc,
+                                           meta_kms_plane_get_id (plane),
+                                           NULL);
     }
 
   if (plane_assignment->rotation)
