@@ -92,8 +92,13 @@ struct _MetaOnscreenNative
 
   struct {
     struct gbm_surface *surface;
-    MetaDrmBuffer *current_fb;
     MetaDrmBuffer *next_fb;
+
+    struct {
+      uint32_t format;
+      uint32_t stride;
+      uint64_t modifier;
+    } last_flip;
   } gbm;
 
 #ifdef HAVE_EGL_DEVICE
@@ -114,28 +119,6 @@ static gboolean
 init_secondary_gpu_state (MetaRendererNative  *renderer_native,
                           CoglOnscreen        *onscreen,
                           GError             **error);
-
-static void
-free_current_bo (CoglOnscreen *onscreen)
-{
-  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
-
-  g_clear_object (&onscreen_native->gbm.current_fb);
-}
-
-static void
-meta_onscreen_native_swap_drm_fb (CoglOnscreen *onscreen)
-{
-  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
-
-  if (!onscreen_native->gbm.next_fb)
-    return;
-
-  free_current_bo (onscreen);
-
-  g_set_object (&onscreen_native->gbm.current_fb, onscreen_native->gbm.next_fb);
-  g_clear_object (&onscreen_native->gbm.next_fb);
-}
 
 static void
 maybe_update_frame_info (MetaCrtc         *crtc,
@@ -199,7 +182,6 @@ notify_view_crtc_presented (MetaRendererView *view,
   maybe_update_frame_info (crtc, frame_info, time_us, flags, sequence);
 
   meta_onscreen_native_notify_frame_complete (onscreen);
-  meta_onscreen_native_swap_drm_fb (onscreen);
 }
 
 static int64_t
@@ -310,7 +292,6 @@ page_flip_feedback_discarded (MetaKmsCrtc  *kms_crtc,
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
 
   meta_onscreen_native_notify_frame_complete (onscreen);
-  meta_onscreen_native_swap_drm_fb (onscreen);
 }
 
 static const MetaKmsPageFlipListenerVtable page_flip_listener_vtable = {
@@ -375,8 +356,9 @@ void
 meta_onscreen_native_dummy_power_save_page_flip (CoglOnscreen *onscreen)
 {
   CoglFrameInfo *frame_info;
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
 
-  meta_onscreen_native_swap_drm_fb (onscreen);
+  g_clear_object (&onscreen_native->gbm.next_fb);
 
   frame_info = cogl_onscreen_peek_tail_frame_info (onscreen);
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
@@ -401,7 +383,7 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
   MetaKmsDevice *kms_device;
   MetaKms *kms;
   MetaKmsUpdate *kms_update;
-  MetaDrmBuffer *buffer;
+  g_autoptr (MetaDrmBuffer) buffer = NULL;
   MetaKmsPlaneAssignment *plane_assignment;
 
   COGL_TRACE_BEGIN_SCOPED (MetaOnscreenNativeFlipCrtcs,
@@ -419,7 +401,7 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
   switch (renderer_gpu_data->mode)
     {
     case META_RENDERER_NATIVE_MODE_GBM:
-      buffer = onscreen_native->gbm.next_fb;
+      buffer = g_steal_pointer (&onscreen_native->gbm.next_fb);
 
       plane_assignment = meta_crtc_kms_assign_primary_plane (crtc_kms,
                                                              buffer,
@@ -429,6 +411,16 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
         {
           meta_kms_plane_assignment_set_fb_damage (plane_assignment,
                                                    rectangles, n_rectangles);
+        }
+
+      if (META_IS_DRM_BUFFER_GBM (buffer))
+        {
+          MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+          struct gbm_bo *gbm_bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
+
+          onscreen_native->gbm.last_flip.format = gbm_bo_get_format (gbm_bo);
+          onscreen_native->gbm.last_flip.modifier = gbm_bo_get_modifier (gbm_bo);
+          onscreen_native->gbm.last_flip.stride = gbm_bo_get_stride (gbm_bo);
         }
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
@@ -1226,8 +1218,6 @@ meta_onscreen_native_is_buffer_scanout_compatible (CoglOnscreen *onscreen,
 {
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
   const MetaCrtcConfig *crtc_config;
-  MetaDrmBuffer *fb;
-  struct gbm_bo *gbm_bo;
 
   crtc_config = meta_crtc_get_config (onscreen_native->crtc);
   if (crtc_config->transform != META_MONITOR_TRANSFORM_NORMAL)
@@ -1239,23 +1229,13 @@ meta_onscreen_native_is_buffer_scanout_compatible (CoglOnscreen *onscreen,
   if (!onscreen_native->gbm.surface)
     return FALSE;
 
-  fb = onscreen_native->gbm.current_fb ? onscreen_native->gbm.current_fb
-                                       : onscreen_native->gbm.next_fb;
-  if (!fb)
+  if (drm_format != onscreen_native->gbm.last_flip.format)
     return FALSE;
 
-  if (!META_IS_DRM_BUFFER_GBM (fb))
+  if (drm_modifier != onscreen_native->gbm.last_flip.modifier)
     return FALSE;
 
-  gbm_bo = meta_drm_buffer_gbm_get_bo (META_DRM_BUFFER_GBM (fb));
-
-  if (gbm_bo_get_format (gbm_bo) != drm_format)
-    return FALSE;
-
-  if (gbm_bo_get_modifier (gbm_bo) != drm_modifier)
-    return FALSE;
-
-  if (gbm_bo_get_stride (gbm_bo) != stride)
+  if (stride != onscreen_native->gbm.last_flip.stride)
     return FALSE;
 
   return TRUE;
@@ -1377,7 +1357,6 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
                            G_IO_ERROR, G_IO_ERROR_PERMISSION_DENIED))
         break;
 
-      g_clear_object (&onscreen_native->gbm.next_fb);
       g_propagate_error (error, g_error_copy (feedback_error));
       return FALSE;
     }
@@ -2158,8 +2137,6 @@ meta_onscreen_native_dispose (GObject *object)
       /* flip state takes a reference on the onscreen so there should
        * never be outstanding flips when we reach here. */
       g_warn_if_fail (onscreen_native->gbm.next_fb == NULL);
-
-      free_current_bo (onscreen);
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
       g_assert_not_reached ();
