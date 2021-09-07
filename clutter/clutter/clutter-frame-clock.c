@@ -659,6 +659,13 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
       return;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
+      if (frame_clock->last_flip_hints & CLUTTER_FRAME_HINT_DIRECT_SCANOUT_ATTEMPTED)
+        {
+          /* Force double buffering, disable triple buffering */
+          frame_clock->pending_reschedule = TRUE;
+          return;
+        }
+
       calculate_next_update_time_us (frame_clock,
                                      &next_update_time_us,
                                      &frame_clock->next_presentation_time_us);
