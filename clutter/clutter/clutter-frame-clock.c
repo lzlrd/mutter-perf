@@ -97,6 +97,8 @@ struct _ClutterFrameClock
   /* Last KMS buffer submission time. */
   int64_t last_flip_time_us;
 
+  ClutterFrameHint last_flip_hints;
+
   /* Last few durations between dispatch start and buffer swap. */
   EstimateQueue dispatch_to_swap_us;
   /* Last few durations between buffer swap and GPU rendering finish. */
@@ -792,10 +794,12 @@ frame_clock_source_dispatch (GSource     *source,
 }
 
 void
-clutter_frame_clock_record_flip_time (ClutterFrameClock *frame_clock,
-                                      int64_t            flip_time_us)
+clutter_frame_clock_record_flip (ClutterFrameClock *frame_clock,
+                                 int64_t            flip_time_us,
+                                 ClutterFrameHint   hints)
 {
   frame_clock->last_flip_time_us = flip_time_us;
+  frame_clock->last_flip_hints = hints;
 }
 
 GString *
