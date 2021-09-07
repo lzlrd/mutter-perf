@@ -34,6 +34,12 @@ typedef enum _ClutterFrameResult
   CLUTTER_FRAME_RESULT_IDLE,
 } ClutterFrameResult;
 
+typedef enum _ClutterFrameHint
+{
+  CLUTTER_FRAME_HINT_NONE = 0,
+  CLUTTER_FRAME_HINT_DIRECT_SCANOUT_ATTEMPTED = 1 << 0,
+} ClutterFrameHint;
+
 #define CLUTTER_TYPE_FRAME_CLOCK (clutter_frame_clock_get_type ())
 CLUTTER_EXPORT
 G_DECLARE_FINAL_TYPE (ClutterFrameClock, clutter_frame_clock,
