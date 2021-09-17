@@ -48,6 +48,8 @@
 #include "backends/native/meta-renderer-native-gles3.h"
 #include "backends/native/meta-renderer-native-private.h"
 
+#define MAX_CONCURRENT_POSTS 1
+
 typedef enum _MetaSharedFramebufferImportStatus
 {
   /* Not tried importing yet. */
@@ -93,6 +95,7 @@ struct _MetaOnscreenNative
   struct {
     struct gbm_surface *surface;
     MetaDrmBuffer *next_fb;
+    MetaDrmBuffer *stalled_fb;
 
     struct {
       uint32_t format;
@@ -111,6 +114,7 @@ struct _MetaOnscreenNative
 
   MetaRendererView *view;
 
+  unsigned int swaps_pending;
   struct {
     int *rectangles;  /* 4 x n_rectangles */
     int n_rectangles;
@@ -121,7 +125,7 @@ G_DEFINE_TYPE (MetaOnscreenNative, meta_onscreen_native,
                COGL_TYPE_ONSCREEN_EGL)
 
 static void
-post_latest_swap (CoglOnscreen *onscreen);
+try_post_latest_swap (CoglOnscreen *onscreen);
 
 static gboolean
 init_secondary_gpu_state (MetaRendererNative  *renderer_native,
@@ -190,6 +194,7 @@ notify_view_crtc_presented (MetaRendererView *view,
   maybe_update_frame_info (crtc, frame_info, time_us, flags, sequence);
 
   meta_onscreen_native_notify_frame_complete (onscreen);
+  try_post_latest_swap (onscreen);
 }
 
 static int64_t
@@ -251,6 +256,7 @@ page_flip_feedback_ready (MetaKmsCrtc *kms_crtc,
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
 
   meta_onscreen_native_notify_frame_complete (onscreen);
+  try_post_latest_swap (onscreen);
 }
 
 static void
@@ -300,6 +306,7 @@ page_flip_feedback_discarded (MetaKmsCrtc  *kms_crtc,
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
 
   meta_onscreen_native_notify_frame_complete (onscreen);
+  try_post_latest_swap (onscreen);
 }
 
 static const MetaKmsPageFlipListenerVtable page_flip_listener_vtable = {
@@ -360,17 +367,38 @@ custom_egl_stream_page_flip (gpointer custom_page_flip_data,
 }
 #endif /* HAVE_EGL_DEVICE */
 
-void
-meta_onscreen_native_dummy_power_save_page_flip (CoglOnscreen *onscreen)
+static void
+drop_stalled_swap (CoglOnscreen *onscreen)
 {
-  CoglFrameInfo *frame_info;
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  CoglFrameInfo *frame_info;
 
-  g_clear_object (&onscreen_native->gbm.next_fb);
+  /* Remember we can't compare stalled_fb because it's not used by
+   * META_RENDERER_NATIVE_MODE_EGL_DEVICE. So we judge stalled to be whenever
+   * swaps_pending > 1.
+   */
+  if (onscreen_native->swaps_pending <= 1)
+    return;
+
+  onscreen_native->swaps_pending--;
+
+  g_clear_object (&onscreen_native->gbm.stalled_fb);
 
   frame_info = cogl_onscreen_peek_tail_frame_info (onscreen);
   frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
   meta_onscreen_native_notify_frame_complete (onscreen);
+}
+
+void
+meta_onscreen_native_dummy_power_save_page_flip (CoglOnscreen *onscreen)
+{
+  drop_stalled_swap (onscreen);
+
+  /* If the monitor just woke up and the shell is fully idle (has nothing
+   * more to swap) then we just woke to an indefinitely black screen. Let's
+   * fix that using the last swap (which is never classified as "stalled").
+   */
+  try_post_latest_swap (onscreen);
 }
 
 static void
@@ -1067,16 +1095,13 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
 
   if (renderer_gpu_data->mode == META_RENDERER_NATIVE_MODE_GBM)
     {
-      g_warn_if_fail (onscreen_native->gbm.next_fb == NULL);
       if (onscreen_native->gbm.next_fb != NULL)
         {
-          CoglFrameInfo *frame_info;
-
-          frame_info = cogl_onscreen_peek_head_frame_info (onscreen);
-          frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
-          meta_onscreen_native_notify_frame_complete (onscreen);
-
-          g_clear_object (&onscreen_native->gbm.next_fb);
+          g_warn_if_fail (onscreen_native->gbm.stalled_fb == NULL);
+          drop_stalled_swap (onscreen);
+          g_assert (onscreen_native->gbm.stalled_fb == NULL);
+          onscreen_native->gbm.stalled_fb =
+            g_steal_pointer (&onscreen_native->gbm.next_fb);
         }
     }
 
@@ -1148,11 +1173,12 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   memcpy (onscreen_native->next_post.rectangles, rectangles, rectangles_size);
   onscreen_native->next_post.n_rectangles = n_rectangles;
 
-  post_latest_swap (onscreen);
+  onscreen_native->swaps_pending++;
+  try_post_latest_swap (onscreen);
 }
 
 static void
-post_latest_swap (CoglOnscreen *onscreen)
+try_post_latest_swap (CoglOnscreen *onscreen)
 {
   CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
   CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
@@ -1174,10 +1200,26 @@ post_latest_swap (CoglOnscreen *onscreen)
   MetaKmsUpdateFlag flags;
   g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
   const GError *feedback_error;
+  unsigned int frames_pending = cogl_onscreen_count_pending_frames (onscreen);
+
+  if (onscreen_native->swaps_pending == 0)
+    return;
+
+  g_assert (frames_pending >= onscreen_native->swaps_pending);
 
   power_save_mode = meta_monitor_manager_get_power_save_mode (monitor_manager);
   if (power_save_mode == META_POWER_SAVE_ON)
     {
+      unsigned int posts_pending;
+
+      posts_pending = frames_pending - onscreen_native->swaps_pending;
+      if (posts_pending >= MAX_CONCURRENT_POSTS)
+        return;  /* wait for the next frame notification and then try again */
+
+      drop_stalled_swap (onscreen);
+      g_return_if_fail (onscreen_native->swaps_pending > 0);
+      onscreen_native->swaps_pending--;
+
       ensure_crtc_modes (onscreen);
       meta_onscreen_native_flip_crtc (onscreen,
                                       onscreen_native->view,
@@ -1338,6 +1380,16 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
       return FALSE;
     }
 
+  /* The new frame is already counted by cogl so that's why this is ">" */
+  if (cogl_onscreen_count_pending_frames (onscreen) > MAX_CONCURRENT_POSTS)
+    {
+      g_set_error_literal (error,
+                           COGL_SCANOUT_ERROR,
+                           COGL_SCANOUT_ERROR_INHIBITED,
+                           "Direct scanout is inhibited during triple buffering");
+      return FALSE;
+    }
+
   renderer_gpu_data = meta_renderer_native_get_gpu_data (renderer_native,
                                                          render_gpu);
 
@@ -1438,6 +1490,9 @@ meta_onscreen_native_finish_frame (CoglOnscreen *onscreen,
   MetaKmsUpdate *kms_update;
   g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
   const GError *error;
+
+  if (cogl_onscreen_count_pending_frames (onscreen) >= MAX_CONCURRENT_POSTS)
+    return;
 
   kms_update = meta_kms_get_pending_update (kms, kms_device);
   if (!kms_update)
