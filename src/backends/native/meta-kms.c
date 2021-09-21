@@ -177,6 +177,8 @@ struct _MetaKms
 
   GList *pending_callbacks;
   guint callback_source_id;
+
+  gboolean shutting_down;
 };
 
 G_DEFINE_TYPE (MetaKms, meta_kms, G_TYPE_OBJECT)
@@ -276,6 +278,9 @@ meta_kms_post_pending_update_sync (MetaKms           *kms,
 
   COGL_TRACE_BEGIN_SCOPED (MetaKmsPostUpdateSync,
                            "KMS (post update)");
+
+  if (kms->shutting_down)
+    return NULL;
 
   update = meta_kms_take_pending_update (kms, device);
   if (!update)
@@ -757,6 +762,7 @@ prepare_shutdown_in_impl (MetaKmsImpl  *impl,
 void
 meta_kms_prepare_shutdown (MetaKms *kms)
 {
+  kms->shutting_down = TRUE;
   meta_kms_run_impl_task_sync (kms, prepare_shutdown_in_impl, NULL, NULL);
   flush_callbacks (kms);
 }
