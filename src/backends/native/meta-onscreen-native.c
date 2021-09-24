@@ -421,6 +421,11 @@ meta_onscreen_native_flip_crtc (CoglOnscreen                *onscreen,
           onscreen_native->gbm.last_flip.format = gbm_bo_get_format (gbm_bo);
           onscreen_native->gbm.last_flip.modifier = gbm_bo_get_modifier (gbm_bo);
           onscreen_native->gbm.last_flip.stride = gbm_bo_get_stride (gbm_bo);
+
+          g_object_set_data_full (G_OBJECT (buffer_gbm),
+                                  "gbm_surface owner",
+                                  g_object_ref (onscreen),
+                                  (GDestroyNotify) g_object_unref);
         }
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
