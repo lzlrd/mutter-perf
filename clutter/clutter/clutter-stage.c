@@ -3845,3 +3845,15 @@ clutter_grab_dismiss (ClutterGrab *grab)
 
   g_free (grab);
 }
+
+ClutterActor *
+clutter_stage_get_grab_actor (ClutterStage *stage)
+{
+  ClutterStagePrivate *priv = stage->priv;
+
+  if (!priv->grabs)
+    return NULL;
+
+  /* Return active grab */
+  return priv->grabs->actor;
+}
