@@ -1068,7 +1068,16 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   if (renderer_gpu_data->mode == META_RENDERER_NATIVE_MODE_GBM)
     {
       g_warn_if_fail (onscreen_native->gbm.next_fb == NULL);
-      g_clear_object (&onscreen_native->gbm.next_fb);
+      if (onscreen_native->gbm.next_fb != NULL)
+        {
+          CoglFrameInfo *frame_info;
+
+          frame_info = cogl_onscreen_peek_head_frame_info (onscreen);
+          frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
+          meta_onscreen_native_notify_frame_complete (onscreen);
+
+          g_clear_object (&onscreen_native->gbm.next_fb);
+        }
     }
 
   update_secondary_gpu_state_pre_swap_buffers (onscreen,
