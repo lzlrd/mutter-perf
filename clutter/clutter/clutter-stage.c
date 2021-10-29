@@ -3496,6 +3496,7 @@ create_crossing_event (ClutterStage         *stage,
                        ClutterInputDevice   *device,
                        ClutterEventSequence *sequence,
                        ClutterEventType      event_type,
+                       ClutterEventFlags     flags,
                        ClutterActor         *source,
                        ClutterActor         *related,
                        graphene_point_t      coords,
@@ -3505,7 +3506,7 @@ create_crossing_event (ClutterStage         *stage,
 
   event = clutter_event_new (event_type);
   event->crossing.time = time_ms;
-  event->crossing.flags = 0;
+  event->crossing.flags = flags;
   event->crossing.stage = stage;
   event->crossing.source = source;
   event->crossing.x = coords.x;
@@ -3576,7 +3577,7 @@ clutter_stage_update_device (ClutterStage         *stage,
         {
           event = create_crossing_event (stage,
                                          device, sequence,
-                                         CLUTTER_LEAVE,
+                                         CLUTTER_LEAVE, 0,
                                          old_actor, new_actor,
                                          point, time_ms);
           if (!_clutter_event_process_filters (event))
@@ -3589,7 +3590,7 @@ clutter_stage_update_device (ClutterStage         *stage,
         {
           event = create_crossing_event (stage,
                                          device, sequence,
-                                         CLUTTER_ENTER,
+                                         CLUTTER_ENTER, 0,
                                          new_actor, old_actor,
                                          point, time_ms);
           if (!_clutter_event_process_filters (event))
@@ -3770,6 +3771,7 @@ clutter_stage_notify_grab_on_entry (ClutterStage       *stage,
                                      entry->device,
                                      entry->sequence,
                                      event_type,
+                                     CLUTTER_EVENT_FLAG_GRAB_NOTIFY,
                                      entry->current_actor,
                                      event_type == CLUTTER_LEAVE ?
                                      grab_actor : old_grab_actor,
