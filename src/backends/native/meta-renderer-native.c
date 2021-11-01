@@ -625,12 +625,18 @@ static gboolean
 dummy_power_save_page_flip_cb (gpointer user_data)
 {
   MetaRendererNative *renderer_native = user_data;
+  GList *old_list =
+    g_steal_pointer (&renderer_native->power_save_page_flip_onscreens);
 
-  g_list_foreach (renderer_native->power_save_page_flip_onscreens,
+  g_list_foreach (old_list,
                   (GFunc) meta_onscreen_native_dummy_power_save_page_flip,
                   NULL);
-  g_clear_list (&renderer_native->power_save_page_flip_onscreens,
+  g_clear_list (&old_list,
                 g_object_unref);
+
+  if (renderer_native->power_save_page_flip_onscreens != NULL)
+    return G_SOURCE_CONTINUE;
+
   renderer_native->power_save_page_flip_source_id = 0;
 
   return G_SOURCE_REMOVE;
