@@ -1535,6 +1535,17 @@ meta_onscreen_native_finish_frame (CoglOnscreen *onscreen,
     }
 }
 
+void
+meta_onscreen_native_discard_pending_swaps (CoglOnscreen *onscreen)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+
+  onscreen_native->swaps_pending = 0;
+
+  g_clear_object (&onscreen_native->gbm.stalled_fb);
+  g_clear_object (&onscreen_native->gbm.next_fb);
+}
+
 static gboolean
 should_surface_be_sharable (CoglOnscreen *onscreen)
 {
