@@ -1288,6 +1288,26 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
 }
 
 static void
+discard_pending_swaps (MetaRenderer *renderer)
+{
+  GList *views = meta_renderer_get_views (renderer);;
+  GList *l;
+
+  for (l = views; l; l = l->next)
+    {
+      ClutterStageView *stage_view = l->data;
+      CoglFramebuffer *fb = clutter_stage_view_get_onscreen (stage_view);
+      CoglOnscreen *onscreen;
+
+      if (!COGL_IS_ONSCREEN (fb))
+        continue;
+
+      onscreen = COGL_ONSCREEN (fb);
+      meta_onscreen_native_discard_pending_swaps (onscreen);
+    }
+}
+
+static void
 keep_current_onscreens_alive (MetaRenderer *renderer)
 {
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
@@ -1315,6 +1335,7 @@ meta_renderer_native_rebuild_views (MetaRenderer *renderer)
   MetaRendererClass *parent_renderer_class =
     META_RENDERER_CLASS (meta_renderer_native_parent_class);
 
+  discard_pending_swaps (renderer);
   meta_kms_discard_pending_page_flips (kms);
 
   keep_current_onscreens_alive (renderer);
