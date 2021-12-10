@@ -1052,6 +1052,19 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   COGL_TRACE_BEGIN_SCOPED (MetaRendererNativeSwapBuffers,
                            "Onscreen (swap-buffers)");
 
+  if (meta_is_topic_enabled (META_DEBUG_KMS))
+    {
+      unsigned int frames_pending =
+        cogl_onscreen_count_pending_frames (onscreen);
+
+      meta_topic (META_DEBUG_KMS,
+                  "Swap buffers: %u frames pending (%s-buffering)",
+                  frames_pending,
+                  frames_pending == 1 ? "double" :
+                  frames_pending == 2 ? "triple" :
+                  "?");
+    }
+
   renderer_gpu_data = meta_renderer_native_get_gpu_data (renderer_native,
                                                          render_gpu);
 
