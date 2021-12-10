@@ -493,6 +493,23 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
         refresh_interval_us;
     }
 
+  switch (frame_clock->state)
+    {
+    case CLUTTER_FRAME_CLOCK_STATE_INIT:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+      break;
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
+      next_presentation_time_us += refresh_interval_us;
+      break;
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
+      /* We shouldn't ever get here but in case we do there is an answer */
+      g_warn_if_reached ();
+      next_presentation_time_us += 2 * refresh_interval_us;
+      break;
+    }
+
   /*
    * Skip one interval if we got an early presented event.
    *
