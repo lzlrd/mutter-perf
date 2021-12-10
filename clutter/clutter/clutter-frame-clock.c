@@ -231,6 +231,10 @@ void
 clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                                       ClutterFrameInfo  *frame_info)
 {
+  const char *debug_state =
+    frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO ?
+    "Triple buffering" : "Double buffering";
+
   frame_clock->last_presentation_time_us = frame_info->presentation_time;
 
   frame_clock->got_measurements_last_frame = FALSE;
@@ -250,7 +254,8 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
         frame_info->cpu_time_before_buffer_swap_us;
 
       CLUTTER_NOTE (FRAME_TIMINGS,
-                    "dispatch2swap %ld µs, swap2render %ld µs, swap2flip %ld µs",
+                    "%s: dispatch2swap %ld µs, swap2render %ld µs, swap2flip %ld µs",
+                    debug_state,
                     dispatch_to_swap_us,
                     swap_to_rendering_done_us,
                     swap_to_flip_us);
@@ -263,6 +268,10 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                                 swap_to_flip_us);
 
       frame_clock->got_measurements_last_frame = TRUE;
+    }
+  else
+    {
+      CLUTTER_NOTE (FRAME_TIMINGS, "%s", debug_state);
     }
 
   if (frame_info->refresh_rate > 1)
