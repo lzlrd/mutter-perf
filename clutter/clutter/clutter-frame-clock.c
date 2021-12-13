@@ -377,8 +377,6 @@ clutter_frame_clock_compute_max_render_time_us (ClutterFrameClock *frame_clock)
     frame_clock->vblank_duration_us +
     clutter_max_render_time_constant_us;
 
-  max_render_time_us = CLAMP (max_render_time_us, 0, refresh_interval_us);
-
   return max_render_time_us;
 }
 
