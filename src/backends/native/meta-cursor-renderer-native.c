@@ -1766,7 +1766,10 @@ meta_cursor_renderer_native_new (MetaBackend        *backend,
 
   priv->backend = backend;
 
-  init_hw_cursor_support (cursor_renderer_native);
+  if (g_strcmp0 (getenv ("MUTTER_DEBUG_DISABLE_HW_CURSORS"), "1"))
+    init_hw_cursor_support (cursor_renderer_native);
+  else
+    g_message ("Disabling hardware cursors because MUTTER_DEBUG_DISABLE_HW_CURSORS is set");
 
   return cursor_renderer_native;
 }
@@ -1774,4 +1777,18 @@ meta_cursor_renderer_native_new (MetaBackend        *backend,
 static void
 meta_cursor_renderer_native_init (MetaCursorRendererNative *native)
 {
+}
+
+void
+meta_cursor_renderer_native_invalidate_gpu_state (MetaCursorRendererNative *native,
+                                                  MetaCursorSprite         *cursor_sprite,
+                                                  MetaGpuKms               *gpu_kms)
+{
+  MetaCursorNativePrivate *cursor_priv;
+
+  cursor_priv = get_cursor_priv (cursor_sprite);
+  if (!cursor_priv)
+    return;
+
+  g_hash_table_remove (cursor_priv->gpu_states, gpu_kms);
 }
