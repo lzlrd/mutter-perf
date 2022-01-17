@@ -1694,7 +1694,6 @@ gpu_kms_is_hardware_rendering (MetaRendererNative *renderer_native,
 
 static MetaRendererNativeGpuData *
 create_renderer_gpu_data_gbm (MetaRendererNative  *renderer_native,
-                              MetaGpuKms          *gpu_kms,
                               MetaDeviceFile      *device_file,
                               MetaGpuKms          *gpu_kms,
                               GError             **error)
@@ -1744,7 +1743,6 @@ create_renderer_gpu_data_surfaceless (MetaRendererNative  *renderer_native,
 #ifdef HAVE_EGL_DEVICE
 static MetaRendererNativeGpuData *
 create_renderer_gpu_data_egl_device (MetaRendererNative  *renderer_native,
-                                     MetaGpuKms          *gpu_kms,
                                      MetaDeviceFile      *device_file,
                                      MetaGpuKms          *gpu_kms,
                                      GError             **error)
@@ -1804,7 +1802,6 @@ meta_renderer_native_create_renderer_gpu_data (MetaRendererNative  *renderer_nat
     return NULL;
 
   gbm_renderer_gpu_data = create_renderer_gpu_data_gbm (renderer_native,
-                                                        gpu_kms,
                                                         device_file,
                                                         gpu_kms,
                                                         &gbm_error);
@@ -1819,7 +1816,6 @@ meta_renderer_native_create_renderer_gpu_data (MetaRendererNative  *renderer_nat
 #ifdef HAVE_EGL_DEVICE
   egl_stream_renderer_gpu_data =
     create_renderer_gpu_data_egl_device (renderer_native,
-                                         gpu_kms,
                                          device_file,
                                          gpu_kms,
                                          &egl_device_error);
